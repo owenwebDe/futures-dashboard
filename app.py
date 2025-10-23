@@ -10,7 +10,7 @@ st.title("📈 Live Futures vs Spot Gap Dashboard")
 
 # ─── ASSET CONFIG ───
 data = [
-    ("Gold", "GC=F", "GLD"),  # SPDR Gold Shares ETF as spot proxy
+    ("Gold", "GC=F", "^XAU"),  # Gold Futures vs Gold Index
     ("Silver", "SI=F", "SLV"),  # iShares Silver Trust ETF as spot proxy
     ("NAS100", "NQ=F", "^NDX"),
     ("US30", "YM=F", "^DJI"),
