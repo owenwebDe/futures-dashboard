@@ -10,8 +10,21 @@ st.set_page_config(page_title="Futures vs Spot Gap", layout="wide")
 # Get API key from Streamlit secrets or environment
 TWELVE_DATA_API_KEY = st.secrets.get("TWELVE_DATA_API_KEY", "demo")  # 'demo' for testing
 
+# Cache for gold spot price (refresh every 10 seconds to avoid rate limits)
+if 'gold_spot_cache' not in st.session_state:
+    st.session_state.gold_spot_cache = None
+    st.session_state.gold_spot_timestamp = 0
+
 def get_gold_spot_price():
-    """Fetch real-time gold spot price from Twelve Data API"""
+    """Fetch real-time gold spot price from Twelve Data API with caching"""
+    current_time = time.time()
+
+    # Use cached value if less than 10 seconds old
+    if (st.session_state.gold_spot_cache is not None and
+        current_time - st.session_state.gold_spot_timestamp < 10):
+        return st.session_state.gold_spot_cache
+
+    # Fetch new price from API
     try:
         url = f"https://api.twelvedata.com/price?symbol=XAUUSD&apikey={TWELVE_DATA_API_KEY}"
         response = requests.get(url, timeout=5)
@@ -20,16 +33,22 @@ def get_gold_spot_price():
         # Check for API errors
         if 'code' in data and data['code'] == 403:
             st.error("⚠️ API Key Error! Please add your Twelve Data API key to Streamlit Secrets")
-            return None
+            return st.session_state.gold_spot_cache  # Return cached value if available
         if 'message' in data:
-            st.warning(f"API Message: {data['message']}")
-            return None
+            # Don't show rate limit warnings, just use cache
+            if 'run out of API credits' not in data.get('message', ''):
+                st.warning(f"API Message: {data['message']}")
+            return st.session_state.gold_spot_cache  # Return cached value
         if 'price' in data:
-            return float(data['price'])
-        return None
+            price = float(data['price'])
+            # Update cache
+            st.session_state.gold_spot_cache = price
+            st.session_state.gold_spot_timestamp = current_time
+            return price
+        return st.session_state.gold_spot_cache
     except Exception as e:
         st.error(f"Gold API Error: {str(e)}")
-        return None
+        return st.session_state.gold_spot_cache
 
 st.title("📈 Live Futures vs Spot Gap Dashboard")
 
