@@ -16,10 +16,19 @@ def get_gold_spot_price():
         url = f"https://api.twelvedata.com/price?symbol=XAUUSD&apikey={TWELVE_DATA_API_KEY}"
         response = requests.get(url, timeout=5)
         data = response.json()
+
+        # Check for API errors
+        if 'code' in data and data['code'] == 403:
+            st.error("⚠️ API Key Error! Please add your Twelve Data API key to Streamlit Secrets")
+            return None
+        if 'message' in data:
+            st.warning(f"API Message: {data['message']}")
+            return None
         if 'price' in data:
             return float(data['price'])
         return None
-    except:
+    except Exception as e:
+        st.error(f"Gold API Error: {str(e)}")
         return None
 
 st.title("📈 Live Futures vs Spot Gap Dashboard")
