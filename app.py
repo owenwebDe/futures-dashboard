@@ -10,13 +10,13 @@ st.title("📈 Live Futures vs Spot Gap Dashboard")
 
 # ─── ASSET CONFIG ───
 data = [
-    ("Gold", "GC=F", "^XAU"),  # Gold Futures vs Gold Index
-    ("Silver", "SI=F", "SLV"),  # iShares Silver Trust ETF as spot proxy
-    ("NAS100", "NQ=F", "^NDX"),
-    ("US30", "YM=F", "^DJI"),
-    ("SPX500", "ES=F", "^GSPC"),
-    ("Oil (WTI)", "CL=F", "USO"),  # United States Oil Fund as spot proxy
-    ("Gas (Natural)", "NG=F", "UNG")  # United States Natural Gas Fund as spot proxy
+    ("Gold", "GC=F", "GLD", 10),  # Gold Futures vs GLD ETF (multiply GLD by 10 for spot price)
+    ("Silver", "SI=F", "SLV", 1),  # iShares Silver Trust ETF as spot proxy
+    ("NAS100", "NQ=F", "^NDX", 1),
+    ("US30", "YM=F", "^DJI", 1),
+    ("SPX500", "ES=F", "^GSPC", 1),
+    ("Oil (WTI)", "CL=F", "USO", 1),  # United States Oil Fund as spot proxy
+    ("Gas (Natural)", "NG=F", "UNG", 1)  # United States Natural Gas Fund as spot proxy
 ]
 
 # Display last update time
@@ -26,15 +26,18 @@ st.write(f"Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 rows = []
 charts = []
 
-for name, fut_symbol, spot_symbol in data:
+for name, fut_symbol, spot_symbol, multiplier in data:
     try:
         futures = yf.Ticker(fut_symbol).history(period="5d")["Close"]
-        spot = yf.Ticker(spot_symbol).history(period="5d")["Close"]
+        spot_raw = yf.Ticker(spot_symbol).history(period="5d")["Close"]
 
         # Skip if no data available
-        if futures.empty or spot.empty:
+        if futures.empty or spot_raw.empty:
             rows.append([name, "N/A", "N/A", "N/A"])
             continue
+
+        # Apply multiplier to spot price (for Gold: GLD * 10 = actual spot price)
+        spot = spot_raw * multiplier
 
         # Current values
         f_now = futures.iloc[-1]
