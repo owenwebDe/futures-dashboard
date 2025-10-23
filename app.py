@@ -3,14 +3,30 @@ import yfinance as yf
 import pandas as pd
 import time
 import plotly.graph_objects as go
+import requests
 
 st.set_page_config(page_title="Futures vs Spot Gap", layout="wide")
+
+# Get API key from Streamlit secrets or environment
+TWELVE_DATA_API_KEY = st.secrets.get("TWELVE_DATA_API_KEY", "demo")  # 'demo' for testing
+
+def get_gold_spot_price():
+    """Fetch real-time gold spot price from Twelve Data API"""
+    try:
+        url = f"https://api.twelvedata.com/price?symbol=XAUUSD&apikey={TWELVE_DATA_API_KEY}"
+        response = requests.get(url, timeout=5)
+        data = response.json()
+        if 'price' in data:
+            return float(data['price'])
+        return None
+    except:
+        return None
 
 st.title("📈 Live Futures vs Spot Gap Dashboard")
 
 # ─── ASSET CONFIG ───
 data = [
-    ("Gold", "GC=F", "GLD", 10),  # Gold Futures vs GLD ETF (multiply GLD by 10 for spot price)
+    ("Gold", "GC=F", "API", 1),  # Gold Futures vs Real Spot from API
     ("Silver", "SI=F", "SLV", 1),  # iShares Silver Trust ETF as spot proxy
     ("NAS100", "NQ=F", "^NDX", 1),
     ("US30", "YM=F", "^DJI", 1),
@@ -29,30 +45,59 @@ charts = []
 for name, fut_symbol, spot_symbol, multiplier in data:
     try:
         futures = yf.Ticker(fut_symbol).history(period="5d")["Close"]
-        spot_raw = yf.Ticker(spot_symbol).history(period="5d")["Close"]
 
-        # Skip if no data available
-        if futures.empty or spot_raw.empty:
-            rows.append([name, "N/A", "N/A", "N/A"])
-            continue
+        # Handle Gold with real-time API spot price
+        if spot_symbol == "API":
+            if futures.empty:
+                rows.append([name, "N/A", "N/A", "N/A"])
+                continue
 
-        # Apply multiplier to spot price (for Gold: GLD * 10 = actual spot price)
-        spot = spot_raw * multiplier
+            # Get real-time gold spot price from API
+            gold_spot = get_gold_spot_price()
+            if gold_spot is None:
+                rows.append([name, f"${futures.iloc[-1]:,.2f}", "API Error", "N/A"])
+                continue
 
-        # Current values
-        f_now = futures.iloc[-1]
-        s_now = spot.iloc[-1]
-        gap = f_now - s_now
+            # Current values
+            f_now = futures.iloc[-1]
+            s_now = gold_spot
+            gap = f_now - s_now
 
-        rows.append([name, f"${f_now:,.2f}", f"${s_now:,.2f}", f"{gap:+.2f}"])
+            rows.append([name, f"${f_now:,.2f}", f"${s_now:,.2f}", f"{gap:+.2f}"])
 
-        # Chart: Futures vs Spot
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=futures.index, y=futures, mode="lines", name="Futures", line=dict(color="blue")))
-        fig.add_trace(go.Scatter(x=spot.index, y=spot, mode="lines", name="Spot", line=dict(color="orange")))
-        fig.update_layout(title=f"{name} (Futures vs Spot)", height=300, margin=dict(l=40, r=40, t=40, b=20))
+            # Chart: For gold, create synthetic spot history using current spot price
+            spot = pd.Series([gold_spot] * len(futures), index=futures.index)
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=futures.index, y=futures, mode="lines", name="Futures", line=dict(color="blue")))
+            fig.add_trace(go.Scatter(x=spot.index, y=spot, mode="lines", name="Real Spot (Live)", line=dict(color="orange", dash="dash")))
+            fig.update_layout(title=f"{name} (Futures vs Real Spot)", height=300, margin=dict(l=40, r=40, t=40, b=20))
+            charts.append(fig)
+        else:
+            # Regular Yahoo Finance spot data
+            spot_raw = yf.Ticker(spot_symbol).history(period="5d")["Close"]
 
-        charts.append(fig)
+            # Skip if no data available
+            if futures.empty or spot_raw.empty:
+                rows.append([name, "N/A", "N/A", "N/A"])
+                continue
+
+            # Apply multiplier to spot price
+            spot = spot_raw * multiplier
+
+            # Current values
+            f_now = futures.iloc[-1]
+            s_now = spot.iloc[-1]
+            gap = f_now - s_now
+
+            rows.append([name, f"${f_now:,.2f}", f"${s_now:,.2f}", f"{gap:+.2f}"])
+
+            # Chart: Futures vs Spot
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=futures.index, y=futures, mode="lines", name="Futures", line=dict(color="blue")))
+            fig.add_trace(go.Scatter(x=spot.index, y=spot, mode="lines", name="Spot", line=dict(color="orange")))
+            fig.update_layout(title=f"{name} (Futures vs Spot)", height=300, margin=dict(l=40, r=40, t=40, b=20))
+
+            charts.append(fig)
 
     except Exception as e:
         # Handle any errors gracefully

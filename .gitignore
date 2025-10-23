@@ -5,3 +5,4 @@ __pycache__/
 *.txt
 !requirements.txt
 .git/
+.streamlit/secrets.toml
